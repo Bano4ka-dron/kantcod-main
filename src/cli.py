@@ -219,11 +219,74 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def interactive_menu() -> list[str]:
+    """Интерактивное меню для запуска без аргументов командной строки."""
+    print("\n" + "=" * 40)
+    print("       ПРОЗРАЧНАЯ ВАКАНСИЯ")
+    print("=" * 40)
+    print("1. Загрузить реальные вакансии (API) с GigaChat")
+    print("2. Загрузить реальные вакансии (API) с Ollama (локально)")
+    print("3. Проверить локальный JSON (GigaChat)")
+    print("4. Проверить локальный JSON (Ollama)")
+    print("5. Проверить локальный JSON (только правила, без ИИ)")
+    print("6. Самопроверка формата (check)")
+    print("7. Запуск по расписанию (GigaChat)")
+    print("0. Выход")
+    print("=" * 40)
+    
+    choice = input("Выберите действие (0-7): ").strip()
+    
+    if choice == "1": return ["run", "--ai", "gigachat"]
+    elif choice == "2": return ["run", "--ai", "ollama"]
+    elif choice in ("3", "4", "5"):
+        print("\n[!] Стандартный файл: data/sample/training_vacancies.json")
+        path_input = input("Введите путь к вашему JSON-файлу (или нажмите Enter, чтобы оставить стандартный): ").strip()
+        
+        # Убираем кавычки, если пользователь перетащил файл в окно консоли
+        path_input = path_input.strip('\'"')
+        
+        if choice == "3":
+            cmd = ["verify", "--ai", "gigachat"]
+        elif choice == "4":
+            cmd = ["verify", "--ai", "ollama"]
+        else:
+            cmd = ["verify", "--ai", "rules"]
+            
+        if path_input:
+            cmd.extend(["--input", path_input])
+        return cmd
+    elif choice == "6": return ["check"]
+    elif choice == "7": return ["schedule", "--ai", "gigachat", "--now"]
+    elif choice == "0": sys.exit(0)
+    else:
+        print("Неверный ввод. Пожалуйста, введите число от 0 до 7.")
+        return interactive_menu()
+
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+        
+    # Если аргументов нет, запускаем интерактивное меню
+    is_interactive = len(argv) == 0
+    if is_interactive:
+        argv = interactive_menu()
+
     parser = build_parser()
     args = parser.parse_args(argv)
     cfg = Config.load(args.config)
-    return args.func(args, cfg)
+    
+    try:
+        result = args.func(args, cfg)
+    except Exception as e:
+        print(f"\n[КРИТИЧЕСКАЯ ОШИБКА] {e}", file=sys.stderr)
+        result = EXIT_ERROR
+        
+    # Чтобы окно не закрывалось сразу после работы в меню
+    if is_interactive:
+        print("\n" + "-" * 40)
+        input("Нажмите Enter, чтобы выйти...")
+        
+    return result
 
 
 if __name__ == "__main__":
